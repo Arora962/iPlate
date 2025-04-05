@@ -1,0 +1,31 @@
+# macOS
+.DS_Store
+
+# Xcode
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+*.xcworkspace
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
+# SwiftPM
+.build/
+.swiftpm/xcode/package.xcworkspace/
+
+# Derived Data
+DerivedData/
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# App Icon images
+*.png
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Local config
+.env
