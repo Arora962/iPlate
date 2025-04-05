@@ -2,7 +2,6 @@
 //  iPlateApp.swift
 //  iPlate
 //
-//  Created by Kriti Arora on 05/04/25.
 //
 
 import SwiftUI
