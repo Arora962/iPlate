@@ -20,9 +20,6 @@ DerivedData/
 timeline.xctimeline
 playground.xcworkspace
 
-# App Icon images
-*.png
-
 # Logs and temp files
 *.log
 *.tmp
