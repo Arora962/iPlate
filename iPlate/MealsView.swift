@@ -1,90 +1,106 @@
 import SwiftUI
 
 struct MealsView: View {
-    // Sample logged meals data model.
     struct LoggedMeal: Identifiable {
         let id = UUID()
         let name: String
         let calories: Int
         let serving: String
         let loggedDate: Date
+        let image: UIImage?  // Optional meal image
     }
     
     @State private var previousMeals: [LoggedMeal] = [
-        LoggedMeal(name: "Idly", calories: 214, serving: "1 serving (128 g)", loggedDate: Date().addingTimeInterval(-3600)),
-        LoggedMeal(name: "Appam", calories: 214, serving: "1 serving (128 g)", loggedDate: Date().addingTimeInterval(-7200)),
-        LoggedMeal(name: "Dosa", calories: 214, serving: "1 serving (128 g)", loggedDate: Date().addingTimeInterval(-10800)),
-        LoggedMeal(name: "Upma", calories: 214, serving: "1 serving (128 g)", loggedDate: Date().addingTimeInterval(-14400))
+        LoggedMeal(name: "Idly", calories: 214, serving: "1 serving (128 g)", loggedDate: Date().addingTimeInterval(-3600), image: nil),
+        LoggedMeal(name: "Appam", calories: 214, serving: "1 serving (128 g)", loggedDate: Date().addingTimeInterval(-7200), image: nil),
+        LoggedMeal(name: "Dosa", calories: 214, serving: "1 serving (128 g)", loggedDate: Date().addingTimeInterval(-10800), image: nil),
+        LoggedMeal(name: "Upma", calories: 214, serving: "1 serving (128 g)", loggedDate: Date().addingTimeInterval(-14400), image: nil)
     ]
-    
-    @State private var searchText: String = ""
-    
-    // For handling scanner presentation.
+
+    @State private var searchText = ""
+
+    // MARK: Scan a Meal
+    @State private var showCamera = false
+    @State private var capturedImage: UIImage? = nil
+    @State private var showMealInputSheet = false
+
+    // Barcode scanner (if needed)
     @State private var isShowingScanner = false
-    @State private var scannerPurpose: String = ""  // Could be "meal" or "barcode"
-    @State private var scannedCode: String = ""
-    
-    // Filter the meals based on search text.
+    @State private var scannerPurpose = ""
+    @State private var scannedCode = ""
+
     var filteredMeals: [LoggedMeal] {
-        if searchText.isEmpty {
-            return previousMeals
-        } else {
-            return previousMeals.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-        }
+        searchText.isEmpty ? previousMeals :
+            previousMeals.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
-    
+
     var body: some View {
         NavigationStack {
             VStack {
-                // Functional Search Bar.
+                // Search
                 TextField("Search Meals", text: $searchText)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding(.horizontal)
-                
-                // Scan Buttons.
+
+                // Buttons
                 HStack(spacing: 16) {
                     ScanCard(title: "Scan a Meal", systemImage: "camera.fill") {
-                        scannerPurpose = "meal"
-                        isShowingScanner = true
+                        showCamera = true
                     }
+
                     ScanCard(title: "Scan a Barcode", systemImage: "barcode.viewfinder") {
                         scannerPurpose = "barcode"
                         isShowingScanner = true
                     }
                 }
                 .padding(.horizontal)
-                
-                // List of previous meals.
+
+                // Meal List
                 List(filteredMeals) { meal in
-                    NavigationLink(destination: MealDetailView(meal: meal, onAddToMeal: {
-                        // Simulate an "Add to Meal" action.
-                        print("\(meal.name) added to your meal")
-                    })) {
-                        VStack(alignment: .leading) {
-                            Text("\(meal.name) - \(meal.calories) Cal")
-                                .font(.headline)
-                            Text(meal.serving)
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
+                    NavigationLink(destination: MealDetailView(meal: meal)) {
+                        HStack {
+                            if let image = meal.image {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .frame(width: 60, height: 60)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                            }
+                            VStack(alignment: .leading) {
+                                Text("\(meal.name) - \(meal.calories) Cal")
+                                    .font(.headline)
+                                Text(meal.serving)
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                     }
                 }
                 .listStyle(.plain)
             }
             .navigationTitle("Meals")
-            // Present the scanner when the flag is set.
-            .sheet(isPresented: $isShowingScanner) {
-                ScannerView { code in
-                    scannedCode = code
-                    // Process the scanned code based on the scannerPurpose.
-                    if scannerPurpose == "meal" {
-                        // You could use the scanned code to identify a meal (e.g., by OCR or a database lookup).
-                        print("Scanned Meal Code: \(code)")
-                    } else {
-                        // For barcode scanning, use the code as needed.
-                        print("Scanned Barcode: \(code)")
+            .sheet(isPresented: $showCamera) {
+                ImagePicker(sourceType: .camera) { image in
+                    showCamera = false
+                    if let img = image {
+                        capturedImage = img
+                        showMealInputSheet = true
                     }
-                    isShowingScanner = false
+                }
+            }
+            .sheet(isPresented: $showMealInputSheet) {
+                if let img = capturedImage {
+                    MealEntrySheet(image: img) { name, calories in
+                        let newMeal = LoggedMeal(
+                            name: name,
+                            calories: calories,
+                            serving: "1 serving (custom)",
+                            loggedDate: Date(),
+                            image: img
+                        )
+                        previousMeals.insert(newMeal, at: 0)
+                        capturedImage = nil
+                        showMealInputSheet = false
+                    }
                 }
             }
         }
@@ -115,51 +131,3 @@ struct ScanCard: View {
     }
 }
 
-struct MealDetailView: View {
-    let meal: MealsView.LoggedMeal
-    var onAddToMeal: () -> Void
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Text(meal.name)
-                .font(.largeTitle)
-                .bold()
-            Text("\(meal.calories) Calories")
-                .font(.title2)
-            Text(meal.serving)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            Text("Logged on: \(formattedDate(meal.loggedDate))")
-                .font(.footnote)
-                .foregroundColor(.gray)
-            
-            Button(action: onAddToMeal) {
-                Text("Add to Meal")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue.opacity(0.8))
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-            }
-            .padding(.horizontal)
-            Spacer()
-        }
-        .padding()
-        .navigationTitle("Meal Details")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    func formattedDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
-}
-
-struct MealsView_Previews: PreviewProvider {
-    static var previews: some View {
-        MealsView()
-    }
-}

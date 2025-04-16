@@ -29,9 +29,22 @@
 		9B85E77B2DA114D1008BE2D4 /* iPlateUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = iPlateUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		9B450CA42DAFE62D00B94591 /* Exceptions for "iPlate" folder in "iPlate" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 9B85E7612DA114CD008BE2D4 /* iPlate */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		9B85E7642DA114CD008BE2D4 /* iPlate */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				9B450CA42DAFE62D00B94591 /* Exceptions for "iPlate" folder in "iPlate" target */,
+			);
 			path = iPlate;
 			sourceTree = "<group>";
 		};
@@ -400,7 +413,9 @@
 				DEVELOPMENT_TEAM = 26YCU887LJ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = iPlate/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to scan barcodes and read meal labels.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "To store meal photographs";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -429,7 +444,9 @@
 				DEVELOPMENT_TEAM = 26YCU887LJ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = iPlate/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to scan barcodes and read meal labels.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "To store meal photographs";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
