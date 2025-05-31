@@ -29,7 +29,7 @@ struct SignupPasswordScreen: View {
                                 let db = Firestore.firestore()
                                 db.collection("users").document(user.uid).setData([
                                     "email": email,
-                                    "password": password
+                                    "createdAt": Timestamp(),
                                 ]) { firestoreError in
                                     if let firestoreError = firestoreError {
                                         print("Error saving user data to Firestore: \(firestoreError.localizedDescription)")
