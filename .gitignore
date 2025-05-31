@@ -26,3 +26,5 @@ playground.xcworkspace
 
 # Local config
 .env
+
+iPlate/GoogleService-Info.plist
