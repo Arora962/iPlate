@@ -1,4 +1,5 @@
 import SwiftUI
+import FirebaseAuth
 
 struct ProfileView: View {
     var body: some View {
@@ -40,8 +41,14 @@ struct ProfileView: View {
                             .navigationTitle("Privacy policy")
                     }
                     Button("Log out") {
-                        // Handle log out action
+                        do {
+                                try Auth.auth().signOut()
+                                UserDefaults.standard.set(false, forKey: "isLoggedIn")
+                            } catch {
+                                print("Error signing out: \(error.localizedDescription)")
+                            }
                     }
+                    .foregroundColor(.red)
                 }
             }
             .navigationTitle("Settings")

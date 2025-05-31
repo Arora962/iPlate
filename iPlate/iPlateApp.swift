@@ -6,9 +6,13 @@
 
 import SwiftUI
 import SwiftData
+import Firebase
 
 @main
 struct iPlateApp: App {
+    init() {
+            FirebaseApp.configure()
+        }
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Item.self,
@@ -24,7 +28,7 @@ struct iPlateApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MainRouterView()
         }
         .modelContainer(sharedModelContainer)
     }
