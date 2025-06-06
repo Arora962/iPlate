@@ -7,8 +7,7 @@ struct ProfileView: View {
             List {
                 Section(header: Text("Profile & Goals")) {
                     NavigationLink("Profile details") {
-                        Text("Profile Details Screen")
-                            .navigationTitle("Profile details")
+                        ProfileDetailsView()
                     }
                     NavigationLink("Goal details") {
                         Text("Goal Details Screen")
@@ -17,10 +16,10 @@ struct ProfileView: View {
                 }
 
                 Section(header: Text("Account & Connectivity")) {
-                    NavigationLink("Accounts") {
+                    /*NavigationLink("Accounts") {
                         Text("Accounts Screen")
                             .navigationTitle("Accounts")
-                    }
+                    }*/
                     NavigationLink("Notifications") {
                         Text("Notifications Screen")
                             .navigationTitle("Notifications")

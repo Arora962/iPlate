@@ -2,13 +2,22 @@ import SwiftUI
 
 struct MainRouterView: View {
     @AppStorage("isLoggedIn") var isLoggedIn: Bool = false
+    @State private var showCompleteSignIn = false
 
     var body: some View {
-        if isLoggedIn {
-            ContentView() // Your existing home screen
-        } else {
-            WelcomeScreen()
+            ZStack {
+                if isLoggedIn {
+                    ContentView()
+                } else {
+                    WelcomeScreen()
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .didReceiveEmailLink)) { _ in
+                showCompleteSignIn = true
+            }
+            .sheet(isPresented: $showCompleteSignIn) {
+                CompleteEmailSignInView()
+            }
         }
     }
-}
 
