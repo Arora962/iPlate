@@ -31,7 +31,7 @@ struct iPlateApp: App {
 
     var body: some Scene {
         WindowGroup {
-            MainRouterView()
+            SplashView()
         }
         .modelContainer(sharedModelContainer)
     }
