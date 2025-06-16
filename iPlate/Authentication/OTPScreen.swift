@@ -6,6 +6,9 @@
 
 
 import SwiftUI
+import FirebaseAuth
+import Firebase
+import FirebaseFirestore
 
 struct OTPScreen: View {
     var email: String
@@ -14,6 +17,7 @@ struct OTPScreen: View {
 
     @State private var enteredOTP = ""
     @State private var confirmPassword = ""
+    @State private var fullName = ""
     @State private var isPasswordVisible = false
     @State private var errorMessage = ""
     @State private var showSuccess = false
@@ -55,6 +59,11 @@ struct OTPScreen: View {
             }
             .background(Color(.secondarySystemBackground))
             .cornerRadius(12)
+            
+            TextField("Full Name", text: $fullName)
+            .padding()
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(12)
 
             if !errorMessage.isEmpty {
                 Text(errorMessage)
@@ -85,6 +94,11 @@ struct OTPScreen: View {
             errorMessage = "Invalid OTP."
             return
         }
+        
+        guard !fullName.trimmingCharacters(in: .whitespaces).isEmpty else {
+            errorMessage = "Please enter your full name."
+            return
+        }
 
         guard confirmPassword.count >= 6 else {
             errorMessage = "Password too short."
@@ -94,7 +108,44 @@ struct OTPScreen: View {
             errorMessage = "Passwords do not match."
             return
         }
+        
+        // ✅ Create the user account
+        Auth.auth().createUser(withEmail: email, password: confirmPassword) { result, err in
+            if let err = err {
+                self.errorMessage = "Signup failed: \(err.localizedDescription)"
+                return
+            }
+            
+            
+            guard let user = result?.user else {
+                self.errorMessage = "User creation failed."
+                return
+            }
+            
+            
+            // Set Firebase Auth display name
+           let changeRequest = user.createProfileChangeRequest()
+           changeRequest.displayName = fullName
+           changeRequest.commitChanges { profileErr in
+               if let profileErr = profileErr {
+                   print("Profile update error: \(profileErr.localizedDescription)")
+               }
+           }
 
+           // Save to Firestore
+           let db = Firestore.firestore()
+           db.collection("users").document(user.uid).setData([
+               "email": email,
+               "name": fullName,
+               "createdAt": Timestamp()
+           ]) { firestoreError in
+               if let firestoreError = firestoreError {
+                   self.errorMessage = "Failed to save data: \(firestoreError.localizedDescription)"
+                   return
+               }
+           }
+        }
+                
         // At this point, OTP and password confirmation are valid
         showSuccess = true
         errorMessage = ""
