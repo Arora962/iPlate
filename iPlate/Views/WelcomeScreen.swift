@@ -54,7 +54,7 @@ struct WelcomeScreen: View {
 
                     // 6. Sign Up button
                     NavigationLink {
-                        SignupEmailScreen()
+                        SignupScreen()
                     } label: {
                         Text("Sign Up")
                             .font(.headline)

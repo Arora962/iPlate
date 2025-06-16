@@ -28,3 +28,6 @@ playground.xcworkspace
 .env
 
 iPlate/GoogleService-Info.plist
+node_modules
+node_modules/
+*.local
