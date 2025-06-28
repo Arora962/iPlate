@@ -1,4 +1,5 @@
 import SwiftUI
+import FirebaseAuth
 
 // MARK: - Wrapper to make UIImage Identifiable
 struct CapturedImageWrapper: Identifiable {
@@ -40,23 +41,13 @@ struct MealsView: View {
         let image: UIImage?
     }
 
-    @State private var previousMeals: [LoggedMeal] = [
-        LoggedMeal(name: "Idly", calories: 214, serving: "1 serving (128 g)", loggedDate: Date().addingTimeInterval(-3600), image: nil),
-        LoggedMeal(name: "Appam", calories: 214, serving: "1 serving (128 g)", loggedDate: Date().addingTimeInterval(-7200), image: nil),
-        LoggedMeal(name: "Dosa", calories: 214, serving: "1 serving (128 g)", loggedDate: Date().addingTimeInterval(-10800), image: nil),
-        LoggedMeal(name: "Upma", calories: 214, serving: "1 serving (128 g)", loggedDate: Date().addingTimeInterval(-14400), image: nil)
-    ]
+    @State private var previousMeals: [LoggedMeal] = []
 
     @State private var searchText = ""
 
     // MARK: Scan a Meal
     @State private var showCamera = false
     @State private var capturedWrapper: CapturedImageWrapper? = nil
-
-    // Barcode scanner (if needed)
-    @State private var isShowingScanner = false
-    @State private var scannerPurpose = ""
-    @State private var scannedCode = ""
 
     var filteredMeals: [LoggedMeal] {
         searchText.isEmpty ? previousMeals :
@@ -76,11 +67,6 @@ struct MealsView: View {
                     ScanCard(title: "Scan a Meal", systemImage: "camera.fill") {
                         showCamera = true
                     }
-
-                    /*ScanCard(title: "Scan a Barcode", systemImage: "barcode.viewfinder") {
-                        scannerPurpose = "barcode"
-                        isShowingScanner = true
-                    }*/
                 }
                 .padding(.horizontal)
 
@@ -113,28 +99,103 @@ struct MealsView: View {
                 ImagePicker(sourceType: .camera) { image in
                     showCamera = false
                     if let img = image {
-                        // Wrap in Identifiable struct
-                        DispatchQueue.main.async {
-                            capturedWrapper = CapturedImageWrapper(image: img)
+                        uploadMealImage(img) { result in
+                            switch result {
+                            case .success(let (name, calories)):
+                                let newMeal = LoggedMeal(
+                                    name: name,
+                                    calories: calories,
+                                    serving: "1 serving (from server)",
+                                    loggedDate: Date(),
+                                    image: img
+                                )
+                                DispatchQueue.main.async {
+                                    previousMeals.insert(newMeal, at: 0)
+                                }
+                            case .failure(let error):
+                                print("Upload failed:", error)
+                            }
                         }
                     }
                 }
             }
+        }
+    }
+}
 
-            // 2) Meal entry sheet using `.sheet(item:)`
-            .sheet(item: $capturedWrapper) { wrapper in
-                MealEntrySheet(image: wrapper.image) { name, calories in
-                    let newMeal = LoggedMeal(
-                        name: name,
-                        calories: calories,
-                        serving: "1 serving (custom)",
-                        loggedDate: Date(),
-                        image: wrapper.image
-                    )
-                    previousMeals.insert(newMeal, at: 0)
-                    capturedWrapper = nil
-                }
+func uploadMealImage(_ image: UIImage, completion: @escaping (Result<(String, Int), Error>) -> Void) {
+    guard let url = URL(string: "http://192.168.1.11:5001/upload") else {
+        completion(.failure(NSError(domain: "Invalid URL", code: -1)))
+        return
+    }
+
+    // Step 1: Get Firebase token
+    Auth.auth().currentUser?.getIDToken(completion: { token, error in
+        guard let token = token, error == nil else {
+            print("❌ Failed to get Firebase token:", error ?? "Unknown error")
+            completion(.failure(error ?? NSError(domain: "Token error", code: -2)))
+            return
+        }
+
+        // Step 2: Prepare request
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        let boundary = UUID().uuidString
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        // Step 3: Build body
+        var body = Data()
+
+        if let imageData = image.jpegData(compressionQuality: 0.8) {
+            body.append("--\(boundary)\r\n")
+            body.append("Content-Disposition: form-data; name=\"image\"; filename=\"meal.jpg\"\r\n")
+            body.append("Content-Type: image/jpeg\r\n\r\n")
+            body.append(imageData)
+            body.append("\r\n")
+        }
+
+        body.append("--\(boundary)\r\n")
+        body.append("Content-Disposition: form-data; name=\"weights\"\r\n\r\n")
+        body.append("100\r\n")
+        body.append("--\(boundary)--\r\n")
+
+        request.httpBody = body
+
+        // Step 4: Send request
+        URLSession.shared.dataTask(with: request) { data, _, error in
+            if let error = error {
+                completion(.failure(error))
+                return
             }
+
+            guard let data = data else {
+                completion(.failure(NSError(domain: "No data", code: -1)))
+                return
+            }
+
+            do {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let summary = json["summary"] as? [String: Any],
+                   let calories = summary["calories"] as? Double,
+                   let foods = json["foods"] as? [[String: Any]],
+                   let first = foods.first,
+                   let foodName = first["food"] as? String {
+                    completion(.success((foodName.capitalized, Int(calories))))
+                } else {
+                    completion(.failure(NSError(domain: "Invalid response", code: -2)))
+                }
+            } catch {
+                completion(.failure(error))
+            }
+        }.resume()
+    })
+}
+// MARK: - Helper to append data to Data
+extension Data {
+    mutating func append(_ string: String) {
+        if let data = string.data(using: .utf8) {
+            append(data)
         }
     }
 }
