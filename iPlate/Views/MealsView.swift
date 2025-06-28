@@ -44,10 +44,8 @@ struct MealsView: View {
     @State private var previousMeals: [LoggedMeal] = []
     @State private var searchText = ""
     @State private var isUploading = false
-
     @State private var showCamera = false
     @State private var capturedWrapper: CapturedImageWrapper? = nil
-    
     @State private var errorMessage: String? = nil
 
     var filteredMeals: [LoggedMeal] {
@@ -121,52 +119,50 @@ struct MealsView: View {
             .sheet(isPresented: $showCamera) {
                 ImagePicker(sourceType: .camera) { image in
                     showCamera = false
-                    if let img = image {
+                    if let img = image, img.size.width > 0 && img.size.height > 0 {
                         capturedWrapper = CapturedImageWrapper(image: img)
+                    } else {
+                        errorMessage = "Invalid image captured. Please try again."
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            errorMessage = nil
+                        }
                     }
                 }
             }
 
             // Weight Entry Sheet
             .sheet(item: $capturedWrapper) { wrapper in
-                if wrapper.image.size.width == 0 || wrapper.image.size.height == 0 {
-                    Text("⚠️ Failed to load a valid image. Please try again.")
-                        .foregroundColor(.red)
-                        .padding()
-                } else {
-                    WeightEntryCard(image: wrapper.image) { weights in
+                WeightEntryCard(image: wrapper.image) { weights in
+                    DispatchQueue.main.async {
+                        isUploading = true
+                    }
+
+                    uploadMealImage(wrapper.image, weights: weights) { result in
                         DispatchQueue.main.async {
-                            isUploading = true
+                            isUploading = false
+                            capturedWrapper = nil
                         }
 
-                        uploadMealImage(wrapper.image, weights: weights) { result in
+                        switch result {
+                        case .success(let (name, calories)):
+                            let newMeal = LoggedMeal(
+                                name: name,
+                                calories: calories,
+                                serving: "1 serving",
+                                loggedDate: Date(),
+                                image: wrapper.image
+                            )
                             DispatchQueue.main.async {
-                                isUploading = false
-                                capturedWrapper = nil
+                                previousMeals.insert(newMeal, at: 0)
+                                UINotificationFeedbackGenerator().notificationOccurred(.success)
                             }
-
-                            switch result {
-                            case .success(let (name, calories)):
-                                let newMeal = LoggedMeal(
-                                    name: name,
-                                    calories: calories,
-                                    serving: "1 serving (from server)",
-                                    loggedDate: Date(),
-                                    image: wrapper.image
-                                )
-                                DispatchQueue.main.async {
-                                    previousMeals.insert(newMeal, at: 0)
-                                    UINotificationFeedbackGenerator().notificationOccurred(.success)
-                                }
-                            case .failure(let error):
-                                DispatchQueue.main.async {
-                                    UINotificationFeedbackGenerator().notificationOccurred(.error)
-                                    print("Upload failed:", error.localizedDescription)
-                                }
+                        case .failure(let error):
+                            DispatchQueue.main.async {
+                                UINotificationFeedbackGenerator().notificationOccurred(.error)
                                 errorMessage = error.localizedDescription
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                    errorMessage = nil
-                                }
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                                errorMessage = nil
                             }
                         }
                     }
@@ -182,107 +178,93 @@ struct WeightEntryCard: View {
     var onSubmit: ([Double]) -> Void
 
     @Environment(\.dismiss) var dismiss
-    @State private var w1 = ""
-    @State private var w2 = ""
-    @State private var w3 = ""
-    @State private var w4 = ""
-    @FocusState private var focusedField: Field?
+    @State private var weights = ["", "", "", ""]
+    @FocusState private var focusedField: Int?
     @State private var showValidationError = false
-
-    enum Field: Hashable {
-        case w1, w2, w3, w4
-    }
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    Text("Enter Portion Weights")
-                        .font(.title2.bold())
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal)
-
+            Form {
+                Section(header: Text("Captured Meal").font(.headline)) {
                     if image.size.width > 0 && image.size.height > 0 {
                         Image(uiImage: image)
                             .resizable()
                             .scaledToFit()
+                            .frame(maxWidth: .infinity)
                             .frame(height: 200)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .padding(.horizontal)
+                            .cornerRadius(12)
+                            .padding(.vertical, 8)
                     }
-
-                    VStack(spacing: 16) {
-                        labeledField("Portion 1 (g)", text: $w1, focus: .w1, next: .w2)
-                        labeledField("Portion 2 (g)", text: $w2, focus: .w2, next: .w3)
-                        labeledField("Portion 3 (g)", text: $w3, focus: .w3, next: .w4)
-                        labeledField("Portion 4 (g)", text: $w4, focus: .w4, next: nil)
-                    }
-                    .padding(.horizontal)
-
-                    if showValidationError {
-                        Text("⚠️ Please enter all 4 weights.")
-                            .foregroundColor(.red)
-                            .font(.footnote)
-                            .padding(.top, -8)
-                    }
-
-                    Button(action: {
-                        let weights = [w1, w2, w3, w4].compactMap { Double($0) }
-                        if weights.count == 4 && !weights.contains(0) {
-                            focusedField = nil
-                            dismiss()
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                onSubmit(weights)
-                            }
-                        } else {
-                            showValidationError = true
+                }
+                
+                Section(header: Text("Portion Weights (grams)").font(.headline)) {
+                    ForEach(0..<4, id: \.self) { index in
+                        HStack {
+                            Text("Portion \(index + 1):")
+                                .fontWeight(.medium)
+                            TextField("0", text: $weights[index])
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .focused($focusedField, equals: index)
+                                .submitLabel(index == 3 ? .done : .next)
+                                .onSubmit {
+                                    if index < 3 {
+                                        focusedField = index + 1
+                                    } else {
+                                        focusedField = nil
+                                    }
+                                }
                         }
-                    }) {
-                        Text("Submit")
+                    }
+                }
+                
+                if showValidationError {
+                    Text("⚠️ Please enter valid weights for all portions")
+                        .foregroundColor(.red)
+                        .font(.footnote)
+                }
+                
+                Section {
+                    Button(action: submitAction) {
+                        Text("Submit Analysis")
                             .font(.headline)
                             .frame(maxWidth: .infinity)
-                            .padding()
+                            .padding(12)
                             .background(Color.orange)
                             .foregroundColor(.white)
-                            .cornerRadius(12)
-                            .shadow(radius: 2)
+                            .cornerRadius(10)
                     }
-                    .padding(.horizontal)
                 }
-                .padding(.vertical)
             }
-            .navigationTitle("Weights")
+            .navigationTitle("Meal Analysis")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .keyboard) {
-                    Button("Done") {
-                        focusedField = nil
-                    }
-                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
                     }
                 }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        focusedField = nil
+                    }
+                }
             }
         }
     }
-
-    @ViewBuilder
-    func labeledField(_ label: String, text: Binding<String>, focus: Field, next: Field?) -> some View {
-        HStack {
-            Text(label)
-                .frame(width: 120, alignment: .leading)
-                .font(.subheadline.bold())
-            TextField("e.g. 120", text: text)
-                .keyboardType(.decimalPad)
-                .padding(10)
-                .background(Color(.systemGray6))
-                .cornerRadius(8)
-                .focused($focusedField, equals: focus)
-                .submitLabel(next != nil ? .next : .done)
-                .onSubmit {
-                    focusedField = next
-                }
+    
+    private func submitAction() {
+        let validWeights = weights.compactMap { Double($0) }
+        if validWeights.count == 4, validWeights.allSatisfy({ $0 > 0 }) {
+            focusedField = nil
+            dismiss()
+            onSubmit(validWeights)
+        } else {
+            showValidationError = true
+            withAnimation {
+                focusedField = weights.firstIndex(where: { Double($0) == nil || Double($0) == 0 }) ?? 0
+            }
         }
     }
 }
@@ -337,16 +319,12 @@ func uploadMealImage(_ image: UIImage, weights: [Double], completion: @escaping 
 
             do {
                 let json = try JSONSerialization.jsonObject(with: data)
-                print("✅ Raw JSON:", json)
-
                 guard let dict = json as? [String: Any] else {
                     completion(.failure(NSError(domain: "Invalid top-level object", code: -2)))
                     return
                 }
 
-                // ✅ Handle backend-side error gracefully
                 if let serverError = dict["error"] as? String {
-                    print("⚠️ Server error:", serverError)
                     completion(.failure(NSError(domain: serverError, code: -3)))
                     return
                 }
@@ -356,7 +334,6 @@ func uploadMealImage(_ image: UIImage, weights: [Double], completion: @escaping 
                     return
                 }
 
-                // ✅ Handle calories being a String or Double
                 var calorieValue: Double? = nil
                 if let calStr = summary["calories"] as? String {
                     calorieValue = Double(calStr)
@@ -379,7 +356,6 @@ func uploadMealImage(_ image: UIImage, weights: [Double], completion: @escaping 
                 completion(.success((foodName.capitalized, Int(calories))))
 
             } catch {
-                print("❌ JSON decode failed:", error)
                 completion(.failure(error))
             }
 
