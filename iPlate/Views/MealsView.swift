@@ -39,6 +39,7 @@ struct MealsView: View {
         let serving: String
         let loggedDate: Date
         let image: UIImage?
+        let foodList: [String]
     }
 
     @State private var previousMeals: [LoggedMeal] = []
@@ -132,7 +133,7 @@ struct MealsView: View {
 
             // Weight Entry Sheet
             .sheet(item: $capturedWrapper) { wrapper in
-                WeightEntryCard(image: wrapper.image) { weights in
+                WeightEntryCard(image: wrapper.image) { name, weights in
                     DispatchQueue.main.async {
                         isUploading = true
                     }
@@ -144,13 +145,14 @@ struct MealsView: View {
                         }
 
                         switch result {
-                        case .success(let (name, calories)):
+                        case .success(let (calories, foodList)):
                             let newMeal = LoggedMeal(
                                 name: name,
                                 calories: calories,
                                 serving: "1 serving",
                                 loggedDate: Date(),
-                                image: wrapper.image
+                                image: wrapper.image,
+                                foodList: foodList
                             )
                             DispatchQueue.main.async {
                                 previousMeals.insert(newMeal, at: 0)
@@ -175,17 +177,27 @@ struct MealsView: View {
 // MARK: - Weight Entry Card
 struct WeightEntryCard: View {
     let image: UIImage
-    var onSubmit: ([Double]) -> Void
+    var onSubmit: (_ mealName: String, _ weights: [Double]) -> Void
 
     @Environment(\.dismiss) var dismiss
+    @State private var mealName: String = ""
     @State private var weights = ["", "", "", ""]
     @FocusState private var focusedField: Int?
     @State private var showValidationError = false
+    @State private var showNameError = false
 
     var body: some View {
         NavigationStack {
             Form {
-                Section(header: Text("Captured Meal").font(.headline)) {
+                Section(header: Text("Meal Name")) {
+                    TextField("Enter meal name", text: $mealName)
+                    .submitLabel(.done)
+                        .onSubmit {
+                            focusedField = 0 // move to first weight field, or call submitAction() if you prefer
+                        }
+                }
+
+                Section(header: Text("Captured Meal")) {
                     if image.size.width > 0 && image.size.height > 0 {
                         Image(uiImage: image)
                             .resizable()
@@ -200,26 +212,32 @@ struct WeightEntryCard: View {
                 Section(header: Text("Portion Weights (grams)").font(.headline)) {
                     ForEach(0..<4, id: \.self) { index in
                         HStack {
-                            Text("Portion \(index + 1):")
-                                .fontWeight(.medium)
-                            TextField("0", text: $weights[index])
-                                .keyboardType(.decimalPad)
-                                .multilineTextAlignment(.trailing)
-                                .focused($focusedField, equals: index)
-                                .submitLabel(index == 3 ? .done : .next)
-                                .onSubmit {
-                                    if index < 3 {
-                                        focusedField = index + 1
-                                    } else {
-                                        focusedField = nil
-                                    }
+                        Text("Portion \(index + 1):")
+                            .fontWeight(.medium)
+                        TextField("0", text: $weights[index])
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .focused($focusedField, equals: index)
+                            .submitLabel(index == 3 ? .done : .next)
+                            .onSubmit {
+                                if index < 3 {
+                                    focusedField = index + 1
+                                } else {
+                                    focusedField = nil
                                 }
+                            }
                         }
+                        .tag(index)
                     }
                 }
                 
                 if showValidationError {
                     Text("⚠️ Please enter valid weights for all portions")
+                        .foregroundColor(.red)
+                        .font(.footnote)
+                }
+                if showNameError {
+                    Text("⚠️ Meal name cannot be empty.")
                         .foregroundColor(.red)
                         .font(.footnote)
                 }
@@ -256,12 +274,19 @@ struct WeightEntryCard: View {
     
     private func submitAction() {
         let validWeights = weights.compactMap { Double($0) }
-        if validWeights.count == 4, validWeights.allSatisfy({ $0 > 0 }) {
+        let trimmedName = mealName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if validWeights.count == 4, validWeights.allSatisfy({ $0 > 0 }), !trimmedName.isEmpty {
             focusedField = nil
             dismiss()
-            onSubmit(validWeights)
+            onSubmit(trimmedName, validWeights)
         } else {
-            showValidationError = true
+            if trimmedName.isEmpty{
+                showNameError = true
+            }
+            else{
+                showNameError = false
+                showValidationError = true
+            }
             withAnimation {
                 focusedField = weights.firstIndex(where: { Double($0) == nil || Double($0) == 0 }) ?? 0
             }
@@ -270,7 +295,7 @@ struct WeightEntryCard: View {
 }
 
 // MARK: - Upload Function
-func uploadMealImage(_ image: UIImage, weights: [Double], completion: @escaping (Result<(String, Int), Error>) -> Void) {
+func uploadMealImage(_ image: UIImage, weights: [Double], completion: @escaping (Result<(Int, [String]), Error>) -> Void) {
     guard let url = URL(string: "http://192.168.1.11:5001/upload") else {
         completion(.failure(NSError(domain: "Invalid URL", code: -1)))
         return
@@ -346,14 +371,12 @@ func uploadMealImage(_ image: UIImage, weights: [Double], completion: @escaping 
                     return
                 }
 
-                guard let foods = dict["foods"] as? [[String: Any]],
-                      let first = foods.first,
-                      let foodName = first["food"] as? String else {
-                    completion(.failure(NSError(domain: "Missing or invalid foods", code: -2)))
-                    return
-                }
+                // ✅ Grab ALL food items from server
+                let foodNames: [String] = (dict["foods"] as? [[String: Any]])?.compactMap {
+                    ($0["food"] as? String)?.capitalized
+                } ?? []
 
-                completion(.success((foodName.capitalized, Int(calories))))
+                completion(.success((Int(calories), foodNames)))
 
             } catch {
                 completion(.failure(error))

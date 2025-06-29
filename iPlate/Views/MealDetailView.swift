@@ -32,6 +32,17 @@ struct MealDetailView: View {
                 .font(.footnote)
                 .foregroundColor(.gray)
 
+            Divider()
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Detected Items:")
+                    .font(.headline)
+                ForEach(meal.foodList, id: \.self) { item in
+                    Text("• \(item.capitalized)")
+                }
+            }
+            .padding(.horizontal)
+
             Spacer()
         }
         .padding()
