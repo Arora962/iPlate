@@ -385,23 +385,23 @@ func uploadMealImage(_ image: UIImage, weights: [Double], completion: @escaping 
 
                 let summary = MealsView.MealSummary(
                     calories: parseDouble(summaryDict["calories"]),
-                    carbs: Double(summaryDict["carbs"] as? String ?? "") ?? 0,
-                    fat: Double(summaryDict["fat"] as? String ?? "") ?? 0,
-                    fiber: Double(summaryDict["fiber"] as? String ?? "") ?? 0,
-                    protein: Double(summaryDict["protein"] as? String ?? "") ?? 0,
-                    energy: Double(summaryDict["energy"] as? String ?? "") ?? 0
+                    carbs: parseDouble(summaryDict["carbs"]),
+                    fat: parseDouble(summaryDict["fat"]),
+                    fiber: parseDouble(summaryDict["fiber"]),
+                    protein: parseDouble(summaryDict["protein"]),
+                    energy: parseDouble(summaryDict["energy"])
                 )
 
                 let foods = foodsArray.compactMap { food -> MealsView.FoodItem? in
                     guard let name = food["food"] as? String else { return nil }
                     return MealsView.FoodItem(
                         name: name.capitalized,
-                        quantity: Double(food["quantity_grams"] as? Int ?? 0),
-                        calories: Double(food["calories"] as? String ?? "") ?? 0,
-                        carbs: Double(food["carbs"] as? String ?? "") ?? 0,
-                        fat: Double(food["fat"] as? String ?? "") ?? 0,
-                        fiber: Double(food["fiber"] as? String ?? "") ?? 0,
-                        protein: Double(food["protein"] as? String ?? "") ?? 0
+                        quantity: parseDouble(food["quantity_grams"]),
+                        calories: parseDouble(food["calories"]),
+                        carbs: parseDouble(food["carbs"]),
+                        fat: parseDouble(food["fat"]),
+                        fiber: parseDouble(food["fiber"]),
+                        protein: parseDouble(food["protein"])
                     )
                 }
 
