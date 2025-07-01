@@ -33,14 +33,45 @@ struct ScanCard: View {
 
 struct MealsView: View {
     struct LoggedMeal: Identifiable {
-        let id = UUID()
-        let name: String
-        let calories: Int
-        let serving: String
-        let loggedDate: Date
-        let image: UIImage?
-        let foodList: [String]
-    }
+            let id = UUID()
+            let name: String
+            let summary: MealSummary
+            let foods: [FoodItem]
+            let serving: String
+            let loggedDate: Date
+            let image: UIImage?
+        }
+
+        struct MealSummary {
+            let calories: Double
+            let carbs: Double
+            let fat: Double
+            let fiber: Double
+            let protein: Double
+            let energy: Double
+        }
+
+        struct FoodItem: Identifiable {
+            let id: UUID
+            let name: String
+            let quantity: Double
+            let calories: Double
+            let carbs: Double
+            let fat: Double
+            let fiber: Double
+            let protein: Double
+
+            init(name: String, quantity: Double, calories: Double, carbs: Double, fat: Double, fiber: Double, protein: Double) {
+                self.id = UUID()
+                self.name = name
+                self.quantity = quantity
+                self.calories = calories
+                self.carbs = carbs
+                self.fat = fat
+                self.fiber = fiber
+                self.protein = protein
+            }
+        }
 
     @State private var previousMeals: [LoggedMeal] = []
     @State private var searchText = ""
@@ -79,7 +110,7 @@ struct MealsView: View {
                                         .clipShape(RoundedRectangle(cornerRadius: 10))
                                 }
                                 VStack(alignment: .leading) {
-                                    Text("\(meal.name) - \(meal.calories) Cal")
+                                    Text("\(meal.name) - \(meal.summary.calories, specifier: "%.0f") Cal")
                                         .font(.headline)
                                     Text(meal.serving)
                                         .font(.subheadline)
@@ -145,14 +176,14 @@ struct MealsView: View {
                         }
 
                         switch result {
-                        case .success(let (calories, foodList)):
+                        case .success(let (summary, foods)):
                             let newMeal = LoggedMeal(
                                 name: name,
-                                calories: calories,
+                                summary: summary,
+                                foods: foods,
                                 serving: "1 serving",
                                 loggedDate: Date(),
-                                image: wrapper.image,
-                                foodList: foodList
+                                image: wrapper.image
                             )
                             DispatchQueue.main.async {
                                 previousMeals.insert(newMeal, at: 0)
@@ -295,7 +326,7 @@ struct WeightEntryCard: View {
 }
 
 // MARK: - Upload Function
-func uploadMealImage(_ image: UIImage, weights: [Double], completion: @escaping (Result<(Int, [String]), Error>) -> Void) {
+func uploadMealImage(_ image: UIImage, weights: [Double], completion: @escaping (Result<(MealsView.MealSummary, [MealsView.FoodItem]), Error>) -> Void){
     guard let url = URL(string: "http://192.168.1.11:5001/upload") else {
         completion(.failure(NSError(domain: "Invalid URL", code: -1)))
         return
@@ -343,40 +374,38 @@ func uploadMealImage(_ image: UIImage, weights: [Double], completion: @escaping 
             }
 
             do {
-                let json = try JSONSerialization.jsonObject(with: data)
-                guard let dict = json as? [String: Any] else {
-                    completion(.failure(NSError(domain: "Invalid top-level object", code: -2)))
+                let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
+                print("📦 Full Server JSON Response:\n", json ?? [:])
+
+                guard let summaryDict = json?["summary"] as? [String: Any],
+                      let foodsArray = json?["foods"] as? [[String: Any]] else {
+                    completion(.failure(NSError(domain: "Missing fields", code: -99)))
                     return
                 }
 
-                if let serverError = dict["error"] as? String {
-                    completion(.failure(NSError(domain: serverError, code: -3)))
-                    return
+                let summary = MealsView.MealSummary(
+                    calories: parseDouble(summaryDict["calories"]),
+                    carbs: Double(summaryDict["carbs"] as? String ?? "") ?? 0,
+                    fat: Double(summaryDict["fat"] as? String ?? "") ?? 0,
+                    fiber: Double(summaryDict["fiber"] as? String ?? "") ?? 0,
+                    protein: Double(summaryDict["protein"] as? String ?? "") ?? 0,
+                    energy: Double(summaryDict["energy"] as? String ?? "") ?? 0
+                )
+
+                let foods = foodsArray.compactMap { food -> MealsView.FoodItem? in
+                    guard let name = food["food"] as? String else { return nil }
+                    return MealsView.FoodItem(
+                        name: name.capitalized,
+                        quantity: Double(food["quantity_grams"] as? Int ?? 0),
+                        calories: Double(food["calories"] as? String ?? "") ?? 0,
+                        carbs: Double(food["carbs"] as? String ?? "") ?? 0,
+                        fat: Double(food["fat"] as? String ?? "") ?? 0,
+                        fiber: Double(food["fiber"] as? String ?? "") ?? 0,
+                        protein: Double(food["protein"] as? String ?? "") ?? 0
+                    )
                 }
 
-                guard let summary = dict["summary"] as? [String: Any] else {
-                    completion(.failure(NSError(domain: "Missing summary", code: -2)))
-                    return
-                }
-
-                var calorieValue: Double? = nil
-                if let calStr = summary["calories"] as? String {
-                    calorieValue = Double(calStr)
-                } else if let calDouble = summary["calories"] as? Double {
-                    calorieValue = calDouble
-                }
-
-                guard let calories = calorieValue else {
-                    completion(.failure(NSError(domain: "Calories missing or invalid", code: -2)))
-                    return
-                }
-
-                // ✅ Grab ALL food items from server
-                let foodNames: [String] = (dict["foods"] as? [[String: Any]])?.compactMap {
-                    ($0["food"] as? String)?.capitalized
-                } ?? []
-
-                completion(.success((Int(calories), foodNames)))
+                completion(.success((summary, foods)))
 
             } catch {
                 completion(.failure(error))
@@ -392,4 +421,10 @@ extension Data {
             append(data)
         }
     }
+}
+func parseDouble(_ value: Any?) -> Double {
+    if let str = value as? String, let dbl = Double(str) { return dbl }
+    if let dbl = value as? Double { return dbl }
+    if let int = value as? Int { return Double(int) }
+    return 0
 }
